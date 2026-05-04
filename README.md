@@ -1,3 +1,7 @@
+## Nota sobre backend
+
+Para esto realice cambios a traves del cual el backend estudiantes ya trabaja con etnias y sexos en tablas independientes, por lo cual puede consultar el backend estudiantes en https://github.com/Wendell-Jarquin/backend_estudiantes.git
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
