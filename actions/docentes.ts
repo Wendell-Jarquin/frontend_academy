@@ -22,15 +22,22 @@ const buildPayload = (formData: FormData, exclude: string[] = []) => {
 };
 
 export async function getAllDocentes(): Promise<Docente[]> {
-    const response = await fetch(`${URL}/docentes`, { cache: 'no-store' });
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to fetch docentes: ${errorText}`);
-    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-    const data = await response.json();
-    if (Array.isArray(data)) return data;
-    return [];
+    try {
+        const response = await fetch(`${URL}/docentes`, { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch docentes: ${errorText}`);
+        }
+
+        const data = await response.json();
+        if (Array.isArray(data)) return data;
+        return [];
+    } finally {
+        clearTimeout(timeoutId);
+    }
 }
 
 export async function createDocente(data: Docente): Promise<boolean> {

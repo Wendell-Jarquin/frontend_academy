@@ -96,23 +96,25 @@ export async function createStudentAction(formData: FormData) {
 }
 
 export async function getAllStudents(): Promise<Estudiante[]> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-    const response = await fetch(`${URL}/estudiantes`, { cache: 'no-store' });
-    if (!response.ok) {
-        // Intenta extraer el error como texto para mostrarlo
-        const errorText = await response.text();
-        throw new Error(`Failed to fetch estudiantes: ${errorText}`);
-    }
-    let data;
     try {
-        data = await response.json();
-        console.log('JSON recibido de /estudiantes:', data);
-    } catch (e) {
-        throw new Error('La respuesta del backend no es JSON válido');
+        const response = await fetch(`${URL}/estudiantes`, { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch estudiantes: ${errorText}`);
+        }
+        let data;
+        try {
+            data = await response.json();
+        } catch (e) {
+            throw new Error('La respuesta del backend no es JSON válido');
+        }
+        if (Array.isArray(data)) return data;
+        return [];
+    } finally {
+        clearTimeout(timeoutId);
     }
-    if (Array.isArray(data)) return data;
-    return [];
-
-
 }
 

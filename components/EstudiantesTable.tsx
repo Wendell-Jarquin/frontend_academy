@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { ChangeEvent } from 'react';
 import type { Estudiante, Sexo, Etnia } from '@/types';
+import { getAvatarUrl, uploadAvatar, deleteAvatar } from '@/actions/files';
 
 type Props = {
     estudiantes: Estudiante[];
@@ -16,9 +17,29 @@ type Props = {
 export default function EstudiantesTable({ estudiantes, onDelete, onUpdate, onCreate, sexos, etnias }: Props) {
     const [showModal, setShowModal] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showProfileModal, setShowProfileModal] = useState(false);
     const [selectedEst, setSelectedEst] = useState<Estudiante | null>(null);
+    const [profileRow, setProfileRow] = useState<Estudiante | null>(null);
     const [form, setForm] = useState({ nombres: '', paterno: '', materno: '', direccion: '', sexo_id: '', etnia_id: '' });
     const [createForm, setCreateForm] = useState({ nombres: '', paterno: '', materno: '', direccion: '', sexo_id: '', etnia_id: '' });
+    const [avatarKey, setAvatarKey] = useState(0);
+    const [uploading, setUploading] = useState(false);
+    const [avatarUrls, setAvatarUrls] = useState<Record<number, string | null>>({});
+    const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchAvatars = async () => {
+            const urls: Record<number, string | null> = {};
+            await Promise.allSettled(
+                estudiantes.map(async (est) => {
+                    const url = await getAvatarUrl(est.id);
+                    urls[est.id] = url;
+                }),
+            );
+            setAvatarUrls(urls);
+        };
+        if (estudiantes.length > 0) fetchAvatars();
+    }, [estudiantes]);
 
     const handleEdit = (est: Estudiante) => {
         setSelectedEst(est);
@@ -32,6 +53,29 @@ export default function EstudiantesTable({ estudiantes, onDelete, onUpdate, onCr
         });
         setShowModal(true);
     };
+
+    const handleOpenProfile = async (est: Estudiante) => {
+        setProfileRow(est);
+        setShowProfileModal(true);
+        const url = await getAvatarUrl(est.id);
+        setProfileAvatarUrl(url);
+    };
+
+    const handleUploadAvatar = useCallback(async (file: File) => {
+        if (!profileRow?.id) return;
+        setUploading(true);
+        const url = await uploadAvatar(profileRow.id, file);
+        if (url) setProfileAvatarUrl(url);
+        setAvatarKey((k) => k + 1);
+        setUploading(false);
+    }, [profileRow]);
+
+    const handleDeleteAvatar = useCallback(async () => {
+        if (!profileRow?.id) return;
+        await deleteAvatar(profileRow.id);
+        setProfileAvatarUrl(null);
+        setAvatarKey((k) => k + 1);
+    }, [profileRow]);
 
     const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -82,6 +126,7 @@ export default function EstudiantesTable({ estudiantes, onDelete, onUpdate, onCr
                 <table className='w-full border-collapse text-left text-sm'>
                     <thead className='bg-slate-900 text-white'>
                         <tr>
+                            <th className='w-12 px-2 py-4 text-center font-medium'>AV</th>
                             <th className='px-5 py-4 font-medium'>Nombre</th>
                             <th className='px-5 py-4 font-medium'>Paterno</th>
                             <th className='px-5 py-4 font-medium'>Materno</th>
@@ -92,12 +137,32 @@ export default function EstudiantesTable({ estudiantes, onDelete, onUpdate, onCr
                     <tbody className='divide-y divide-slate-100'>
                         {estudiantes.map((est, index) => (
                             <tr key={est.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                <td className='px-2 py-4 text-center'>
+                                    {avatarUrls[est.id] ? (
+                                        <img
+                                            src={avatarUrls[est.id]!}
+                                            alt='avatar'
+                                            className='mx-auto h-8 w-8 rounded-full object-cover'
+                                        />
+                                    ) : (
+                                        <div className='mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-500'>
+                                            {est.nombres ? est.nombres[0].toUpperCase() : '?'}
+                                        </div>
+                                    )}
+                                </td>
                                 <td className='px-5 py-4 font-medium text-slate-900'>{est.nombres}</td>
                                 <td className='px-5 py-4 text-slate-600'>{est.paterno}</td>
                                 <td className='px-5 py-4 text-slate-600'>{est.materno}</td>
                                 <td className='px-5 py-4 text-slate-600'>{est.direccion}</td>
                                 <td className='px-5 py-4 text-center'>
                                     <div className='flex items-center justify-center gap-3'>
+                                        <button
+                                            type='button'
+                                            onClick={() => handleOpenProfile(est)}
+                                            className='rounded-full border border-sky-200 px-3 py-1 text-xs font-semibold text-sky-600 transition hover:border-sky-300 hover:bg-sky-50'
+                                        >
+                                            Perfil
+                                        </button>
                                         <button
                                             type='button'
                                             onClick={() => handleEdit(est)}
@@ -274,6 +339,61 @@ export default function EstudiantesTable({ estudiantes, onDelete, onUpdate, onCr
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {showProfileModal && profileRow && (
+                <div className='fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4'>
+                    <div className='w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl'>
+                        <h2 className='text-xl font-semibold text-slate-900'>Perfil</h2>
+                        <p className='mb-6 text-sm text-slate-500'>Foto de perfil del estudiante.</p>
+
+                        <div className='mb-6 flex flex-col items-center gap-4'>
+                            {profileAvatarUrl ? (
+                                <img
+                                    key={avatarKey}
+                                    src={profileAvatarUrl}
+                                    alt='avatar'
+                                    className='h-28 w-28 rounded-full object-cover ring-4 ring-slate-100'
+                                />
+                            ) : (
+                                <div className='flex h-28 w-28 items-center justify-center rounded-full bg-slate-100 ring-4 ring-slate-100 text-3xl font-semibold text-slate-400'>
+                                    {profileRow.nombres ? profileRow.nombres[0].toUpperCase() : '?'}
+                                </div>
+                            )}
+                        </div>
+
+                        <label className='flex cursor-pointer items-center justify-center rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-500'>
+                            {uploading ? 'Subiendo...' : 'Subir imagen'}
+                            <input
+                                type='file'
+                                accept='image/*'
+                                className='hidden'
+                                disabled={uploading}
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleUploadAvatar(file);
+                                }}
+                            />
+                        </label>
+
+                        <div className='mt-4 flex justify-between'>
+                            <button
+                                type='button'
+                                onClick={handleDeleteAvatar}
+                                className='rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 transition hover:border-rose-300 hover:bg-rose-50'
+                            >
+                                Eliminar foto
+                            </button>
+                            <button
+                                type='button'
+                                onClick={() => setShowProfileModal(false)}
+                                className='rounded-full border border-slate-200 px-4 py-2 text-sm'
+                            >
+                                Cerrar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
